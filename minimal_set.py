@@ -17,7 +17,8 @@ class MinimalSetCalc:
                  cpu_cores=1, 
                  num_iterations=100, 
                  feature_keep_rate=0.5,
-                 ranking_metric='feature_importances_'):
+                 ranking_metric='feature_importances_',
+                 cv_fold=5):
         self.X = X
         self.y = y
         self.model = model
@@ -26,6 +27,7 @@ class MinimalSetCalc:
         self.num_iterations = num_iterations
         self.feature_keep_rate = feature_keep_rate
         self.ranking_metric = ranking_metric
+        self.cv_fold = cv_fold
     
     def minimal_set_calc(self, seed):
         print('minimal sets calculation for seed: {}.............'.format(seed))
@@ -33,7 +35,7 @@ class MinimalSetCalc:
         y = self.y
         feature_keep_rate = self.feature_keep_rate
         ranking_metric = self.ranking_metric
-        cv_splits = KFold(5, random_state=seed, shuffle=True)
+        cv_splits = KFold(self.cv_fold, random_state=seed, shuffle=True)
         cv_out = cross_validate(self.model, X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
         base_score = np.mean(cv_out['train_score'])
         feature_list = X.columns
@@ -62,7 +64,7 @@ class MinimalSetCalc:
         minimal_features_rmse_list = [current_test_score]
         minimal_features_length_list = [len(feature_list)]
         minimal_features_idx_list = ['; '.join(str(v) for v in feature_list_index)]
-        minimal_features_importance_list = ['; '.join(str(v) for v in current_feature_importance)]
+        minimal_features_importance_list = ['; '.join(str(v) for v in current_feature_importance/self.cv_fold)]
         lef_over_features = X.columns.difference(feature_list)
         while (len(lef_over_features) > 0):
             minimal_features = lef_over_features
@@ -97,7 +99,7 @@ class MinimalSetCalc:
             minimal_features_rmse_list.append(minimal_set_test_score)
             minimal_features_idx_list.append('; '.join(str(v) for v in minimal_features_index))
             minimal_features_length_list.append(len(minimal_features_index))
-            minimal_features_importance_list.append('; '.join(str(v) for v in current_feature_importance))
+            minimal_features_importance_list.append('; '.join(str(v) for v in current_feature_importance/self.cv_fold))
             lef_over_features = lef_over_features.difference(minimal_features)
 
         res = np.array([
@@ -110,26 +112,17 @@ class MinimalSetCalc:
 
         return res
     
-    def execute(self, output_dir='./'):
+    def execute(self, output_dir='.'):
         with Pool(self.cpu_cores) as p:
-            result_list = list(p.imap(self.minimal_set_calc, range(self.num_iterations)))
+            result_list = list(tqdm(p.imap(self.minimal_set_calc, range(self.num_iterations)), total=self.num_iterations))
         result_df_list = []
         for result, i in zip(result_list, range(self.num_iterations)):
             result_df = pd.DataFrame(index=range(len(result[1].split(', '))))
             result_df['minimal_set_size'] = [int(j) for j in result[1].split(', ')]
             result_df['minimal_set_idx'] = result[3].split(', ')
             result_df['minimal_set_acc'] = [float(j) for j in result[2].split(', ')]
-            result_df['minimal_set_importances'] = [float(j) for j in result[4].split(', ')]
+            result_df['minimal_set_importances'] = result[4].split(', ')
             result_df_list.append(result_df)
+            result_df.to_csv('{}/minimal_set_out_{}.csv'.format(output_dir, i), index=False)
         return result_df_list
 
-
-target_feature = 'TotalNUE'
-cpu_cores = 10
-data_matrix = pd.read_csv('./data/NResponse_features.csv', index_col=0)
-X = data_matrix.iloc[:-2].T
-y = data_matrix.loc[target_feature]
-
-model = RandomForestRegressor(random_state=22, n_jobs=1)
-new_run = MinimalSetCalc(X, y, model, cpu_cores=5, num_iterations=10, feature_keep_rate=0.05)
-res = new_run.execute()

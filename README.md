@@ -1,3 +1,9 @@
+### How to use
+Import the moduel from file:
+```
+from minimal_set import MinimalSetCalc
+```
+
 Initialize the calculation class with ``MinimalSetCalc(X, y, model=RandomForestRegressor(random_state=42, n_jobs=1), cpu_cores=1, num_iterations=100,feature_keep_rate=0.5, ranking_metric='feature_importances_')``
 
 Parameters:

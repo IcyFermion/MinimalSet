@@ -25,7 +25,7 @@ y = data_matrix.loc[target_feature_names].values
 # %%
 # model and calculation setup
 model = RandomForestRegressor(random_state=22, n_jobs=1)
-test_run = MinimalSetCalc(X, y, target_feature_names, model, cpu_cores=cpu_cores, num_iterations=10, feature_keep_rate=0.5, output_dir=output_dir)
+test_run = MinimalSetCalc(X, y, target_feature_names, model, cpu_cores=cpu_cores, num_iterations=100, feature_keep_rate=0.5, output_dir=output_dir)
 
 # %%
 test_result = test_run.execute()

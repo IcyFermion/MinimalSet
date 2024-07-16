@@ -140,15 +140,12 @@ class MinimalSetCalc:
         for minimal_set_idx in filtered_df['minimal_set_idx']:
             minimal_set = [int(idx) for idx in minimal_set_idx.split('; ')]
             minimal_set.sort()
-            for i, j in combinations(minimal_set, 2):  
+            for i in minimal_set:
                 if i in solo_appearance_dict: 
                     solo_appearance_dict[i] += 1
                 else:
                     solo_appearance_dict[i] = 1
-                if j in solo_appearance_dict: 
-                    solo_appearance_dict[j] += 1
-                else:
-                    solo_appearance_dict[j] = 1
+            for i, j in combinations(minimal_set, 2):
                 if i in co_appearance_dict:
                     if j in co_appearance_dict[i]:
                         co_appearance_dict[i][j] += 1

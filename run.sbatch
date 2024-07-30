@@ -1,5 +1,3 @@
-# sbatch for NYU Greene HPC usage
-
 #!/bin/bash
 #SBATCH --job-name=minimal_sets
 #SBATCH --nodes=1

@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=minimal_sets
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=8GB
 #SBATCH --time=3:00:00
 
 module purge
-module load anaconda3/2020.07
-source /share/apps/anaconda3/2020.07/etc/profile.d/conda.sh
-conda activate exp
-cd /home/bs4290/maize
-python  hpc_run.py 32 ./data/NResponse_features.csv ./output  TotalNUE GrainBiomass
-exit
+singularity exec \
+	    --overlay /scratch/bs4290/condaenv/my_env.ext3:ro \
+	    /scratch/work/public/singularity/ubuntu24.04.4.sif\
+	    /bin/bash -c "source /ext3/env.sh; \
+        python  hpc_run.py 16 ./data/NResponse_features.csv ./output  TotalNUE GrainBiomass"

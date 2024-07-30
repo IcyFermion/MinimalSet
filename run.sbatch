@@ -8,6 +8,6 @@
 module purge
 singularity exec \
 	    --overlay /scratch/bs4290/condaenv/my_env.ext3:ro \
-	    /scratch/work/public/singularity/ubuntu24.04.4.sif\
+	    /scratch/work/public/singularity/ubuntu-24.04.sif\
 	    /bin/bash -c "source /ext3/env.sh; \
         python  hpc_run.py 16 ./data/NResponse_features.csv ./output  TotalNUE GrainBiomass"

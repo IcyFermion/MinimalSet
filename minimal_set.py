@@ -31,8 +31,10 @@ class MinimalSetCalc:
                 repeating_y=None):
         self.X = X
         self.y_list = y
+        self.repeating_y_list = y
         if len(y.shape) == 1:
             self.y_list = np.array([y])
+            self.repeating_y_list = np.array([y])
         self.target_names = target_names
         self.model = model
         self.size_threshold = size_threshold
@@ -89,7 +91,9 @@ class MinimalSetCalc:
         current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), cv_out['estimator'], 0)
         current_score = base_score
         current_test_score = base_score
-        current_squared_error =  np.square(cv_out['estimator'][0].predict(X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
+        # hacky way to get the current testing error
+        if self.is_ts:
+            current_squared_error =  np.square(cv_out['estimator'][0].predict(X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
         continue_flag = True
         while(continue_flag):
             keep_feature_num = int(len(feature_list)*feature_keep_rate)
@@ -104,7 +108,8 @@ class MinimalSetCalc:
             current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
             current_test_score = np.mean(current_cv_out['test_score'])
             # hacky way to get the current testing error
-            current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
+            if self.is_ts:
+                current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
             if (len(feature_list) < 4):
                 continue_flag = False
                 break
@@ -131,7 +136,8 @@ class MinimalSetCalc:
             minimal_set_test_score = np.mean(current_cv_out['test_score'])
             current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
             # hacky way to get the current testing error
-            current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
+            if self.is_ts:
+                current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
             if (current_score < base_score):
                 continue_flag = False
                 minimal_set_test_score = 0
@@ -152,7 +158,8 @@ class MinimalSetCalc:
                 current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
                 minimal_set_test_score = np.mean(current_cv_out['test_score'])
                 # hacky way to get the current testing error
-                current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
+                if self.is_ts:
+                    current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
                 if (len(minimal_features) < 4):
                     continue_flag = False
                     break

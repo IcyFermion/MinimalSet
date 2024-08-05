@@ -24,7 +24,9 @@ class MinimalSetCalc:
                 ranking_metric='feature_importances_',
                 cv_fold=5,
                 output_dir='./output',
-                size_threshold=10):
+                size_threshold=10,
+                is_ts=False,
+                ts_splits=None):
         self.X = X
         self.y_list = y
         if len(y.shape) == 1:
@@ -39,6 +41,12 @@ class MinimalSetCalc:
         self.ranking_metric = ranking_metric
         self.cv_fold = cv_fold
         self.output_dir = output_dir
+        self.is_ts = is_ts
+        if is_ts:
+            self.cv_fold = 1
+            if ts_splits is None:
+                raise TypeError("Need train/test splits index input for time-series data")
+        self.ts_splits = ts_splits
         for name in target_names:
             Path(output_dir+'/'+name).mkdir(parents=True, exist_ok=True)
             Path(output_dir+'/'+name+'/co_dependency').mkdir(parents=True, exist_ok=True)
@@ -46,16 +54,23 @@ class MinimalSetCalc:
 
     
     def minimal_set_calc(self, seed):
-        # result_df = pd.read_csv('{}/{}/minimal_sets/minimal_set_out_{}.csv'.format(self.output_dir, self.current_target, seed))
-        # filtered_df = result_df[result_df['minimal_set_acc'] > 0]
-        # filtered_df = filtered_df[filtered_df['minimal_set_size'] < self.size_threshold]
-        # return filtered_df
         X = self.X
+        # dropping self-targeting feature in it exists
+        if self.current_target in X.columns:
+            X = X.drop(self.current_target, axis=1)
         y = self.y
+        model = self.model
         feature_keep_rate = self.feature_keep_rate
-        ranking_metric = self.ranking_metric
+        ranking_metric = 'feature_importances_'
         cv_splits = KFold(self.cv_fold, random_state=seed, shuffle=True)
-        cv_out = cross_validate(self.model, X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
+        # different setup for time-series data:
+        if self.is_ts:
+            # force using random forest model for now
+            model = RandomForestRegressor(random_state=seed, n_jobs=1)
+            ranking_metric = self.ranking_metric
+            # single train/test split from the initialization input
+            cv_splits = self.ts_splits
+        cv_out = cross_validate(model, X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
         base_score = np.mean(cv_out['train_score'])
         feature_list = X.columns
         current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), cv_out['estimator'], 0)
@@ -66,7 +81,7 @@ class MinimalSetCalc:
             keep_feature_num = int(len(feature_list)*feature_keep_rate)
             kept_features = feature_list[np.argsort(current_feature_importance)[-1*keep_feature_num:]]
             current_X = X[kept_features]
-            current_cv_out = cross_validate(self.model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
+            current_cv_out = cross_validate(model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
             current_score = np.mean(current_cv_out['train_score'])
             if current_score < base_score:
                 continue_flag = False
@@ -84,11 +99,12 @@ class MinimalSetCalc:
         minimal_features_length_list = [len(feature_list)]
         minimal_features_idx_list = ['; '.join(str(v) for v in feature_list_index)]
         minimal_features_importance_list = ['; '.join(str(v) for v in current_feature_importance/self.cv_fold)]
+
         lef_over_features = X.columns.difference(feature_list)
         while (len(lef_over_features) > 0):
             minimal_features = lef_over_features
             current_X = X[minimal_features]
-            current_cv_out = cross_validate(self.model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
+            current_cv_out = cross_validate(model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
             current_score = np.mean(current_cv_out['train_score'])
             minimal_set_test_score = np.mean(current_cv_out['test_score'])
             current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
@@ -102,7 +118,7 @@ class MinimalSetCalc:
                 keep_feature_num = int(len(feature_list)*feature_keep_rate)
                 kept_features = minimal_features[np.argsort(current_feature_importance)[-1*keep_feature_num:]]
                 current_X = X[kept_features]
-                current_cv_out = cross_validate(self.model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
+                current_cv_out = cross_validate(model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
                 current_score = np.mean(current_cv_out['train_score'])
                 minimal_set_test_score = np.mean(current_cv_out['test_score'])
                 if (current_score < base_score):
@@ -132,9 +148,8 @@ class MinimalSetCalc:
         filtered_df = filtered_df[filtered_df['minimal_set_size'] < self.size_threshold]
         return filtered_df
     
-    def co_dependency_calc(self, filtered_df, target_name):
+    def co_dependency_calc(self, filtered_df, target_name, feature_names):
         # co dependency calculation
-        feature_names = list(self.X.columns)
         co_appearance_dict = {}
         solo_appearance_dict = {}
         for minimal_set_idx in filtered_df['minimal_set_idx']:
@@ -177,20 +192,23 @@ class MinimalSetCalc:
         output_df.to_csv(self.output_dir+'/'+target_name+'/co_dependency/co_dependency.csv')
 
     def execute(self, co_dependency_calc=True):
-        feature_names = pd.DataFrame(index=self.X.columns)
-        feature_names.to_csv(self.output_dir+'/feature_names.tsv', header=False)
         filtered_df_list = []
         for target_name, y in zip(self.target_names, self.y_list):
             self.y = y
             self.current_target = target_name
+            X = self.X
+            # dropping self-targeting feature in it exists
+            if self.current_target in X.columns:
+                X = X.drop(self.current_target, axis=1)
+            feature_names = pd.DataFrame(index=X.columns)
+            feature_names.to_csv(self.output_dir+'/'+target_name+'/feature_names.tsv', header=False)
             print('Minimal Set calculation for {}... ...'.format(target_name))
             with Pool(self.cpu_cores) as p:
                 result_list = list(tqdm(p.imap(self.minimal_set_calc, range(self.num_iterations)), total=self.num_iterations))
             filtered_df = pd.concat(result_list, ignore_index=True)
-            filtered_df_list.append(filtered_df)
             filtered_df.to_csv(self.output_dir+'/'+target_name+'/filtered_minimal_sets.csv')
-        if co_dependency_calc:
-            for target_name, filtered_df in zip(self.target_names, filtered_df_list):
-                self.co_dependency_calc(filtered_df, target_name=target_name)
+            filtered_df_list.append(filtered_df)
+            if co_dependency_calc:
+                self.co_dependency_calc(filtered_df, target_name=target_name, feature_names=X.columns)
         return filtered_df_list
 

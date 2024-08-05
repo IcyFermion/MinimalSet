@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from scipy import stats
 import copy
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_validate
@@ -26,7 +27,8 @@ class MinimalSetCalc:
                 output_dir='./output',
                 size_threshold=10,
                 is_ts=False,
-                ts_splits=None):
+                ts_splits=None,
+                repeating_y=None):
         self.X = X
         self.y_list = y
         if len(y.shape) == 1:
@@ -46,7 +48,14 @@ class MinimalSetCalc:
             self.cv_fold = 1
             if ts_splits is None:
                 raise TypeError("Need train/test splits index input for time-series data")
-        self.ts_splits = ts_splits
+            if repeating_y is None:
+                raise TypeError("Need repeating y value input for time-series data")
+
+            self.ts_splits = ts_splits
+            self.repeating_y_list = repeating_y
+            if len(repeating_y.shape) == 1:
+                self.repeating_y_list = np.array([repeating_y])
+
         for name in target_names:
             Path(output_dir+'/'+name).mkdir(parents=True, exist_ok=True)
             Path(output_dir+'/'+name+'/co_dependency').mkdir(parents=True, exist_ok=True)
@@ -59,10 +68,8 @@ class MinimalSetCalc:
         if self.current_target in X.columns:
             X = X.drop(self.current_target, axis=1)
         y = self.y
-        model = self.model
+        repeating_y = self.repeating_y
         feature_keep_rate = self.feature_keep_rate
-        ranking_metric = 'feature_importances_'
-        cv_splits = KFold(self.cv_fold, random_state=seed, shuffle=True)
         # different setup for time-series data:
         if self.is_ts:
             # force using random forest model for now
@@ -70,12 +77,19 @@ class MinimalSetCalc:
             ranking_metric = self.ranking_metric
             # single train/test split from the initialization input
             cv_splits = self.ts_splits
+            # error if repeating y value is used as prediction
+            repeating_squared_error = np.square(repeating_y[cv_splits[0][1]]-y[cv_splits[0][1]])
+        else:
+            model = self.model
+            ranking_metric = 'feature_importances_'
+            cv_splits = KFold(self.cv_fold, random_state=seed, shuffle=True)
         cv_out = cross_validate(model, X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)
         base_score = np.mean(cv_out['train_score'])
         feature_list = X.columns
         current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), cv_out['estimator'], 0)
         current_score = base_score
         current_test_score = base_score
+        current_squared_error =  np.square(cv_out['estimator'][0].predict(X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
         continue_flag = True
         while(continue_flag):
             keep_feature_num = int(len(feature_list)*feature_keep_rate)
@@ -89,6 +103,8 @@ class MinimalSetCalc:
             feature_list = kept_features
             current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
             current_test_score = np.mean(current_cv_out['test_score'])
+            # hacky way to get the current testing error
+            current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
             if (len(feature_list) < 4):
                 continue_flag = False
                 break
@@ -99,6 +115,8 @@ class MinimalSetCalc:
         minimal_features_length_list = [len(feature_list)]
         minimal_features_idx_list = ['; '.join(str(v) for v in feature_list_index)]
         minimal_features_importance_list = ['; '.join(str(v) for v in current_feature_importance/self.cv_fold)]
+
+        # print(stats.ttest_rel(current_squared_error, repeating_squared_error))
 
         lef_over_features = X.columns.difference(feature_list)
         while (len(lef_over_features) > 0):
@@ -127,6 +145,8 @@ class MinimalSetCalc:
                 minimal_features = kept_features
                 current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
                 minimal_set_test_score = np.mean(current_cv_out['test_score'])
+                # hacky way to get the current testing error
+                current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
                 if (len(minimal_features) < 4):
                     continue_flag = False
                     break
@@ -193,8 +213,9 @@ class MinimalSetCalc:
 
     def execute(self, co_dependency_calc=True):
         filtered_df_list = []
-        for target_name, y in zip(self.target_names, self.y_list):
+        for target_name, y, repeating_y in zip(self.target_names, self.y_list, self.repeating_y_list):
             self.y = y
+            self.repeating_y = repeating_y
             self.current_target = target_name
             X = self.X
             # dropping self-targeting feature in it exists

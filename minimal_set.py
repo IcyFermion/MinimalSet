@@ -116,7 +116,11 @@ class MinimalSetCalc:
         minimal_features_idx_list = ['; '.join(str(v) for v in feature_list_index)]
         minimal_features_importance_list = ['; '.join(str(v) for v in current_feature_importance/self.cv_fold)]
 
-        # print(stats.ttest_rel(current_squared_error, repeating_squared_error))
+        # stats for comparison with repeating value prediction
+        if self.is_ts:
+            repeating_comp_ttest = stats.ttest_rel(current_squared_error, repeating_squared_error)
+            repeating_value_comp_diff = [repeating_comp_ttest.statistic]
+            repeating_value_comp_pval = [repeating_comp_ttest.pvalue]
 
         lef_over_features = X.columns.difference(feature_list)
         while (len(lef_over_features) > 0):
@@ -126,6 +130,8 @@ class MinimalSetCalc:
             current_score = np.mean(current_cv_out['train_score'])
             minimal_set_test_score = np.mean(current_cv_out['test_score'])
             current_feature_importance = reduce(lambda a, b: a + getattr(b, ranking_metric), current_cv_out['estimator'], 0)
+            # hacky way to get the current testing error
+            current_squared_error =  np.square(current_cv_out['estimator'][0].predict(current_X.iloc[cv_splits[0][1]])-y[cv_splits[0][1]])
             if (current_score < base_score):
                 continue_flag = False
                 minimal_set_test_score = 0
@@ -155,6 +161,13 @@ class MinimalSetCalc:
             minimal_features_idx_list.append('; '.join(str(v) for v in minimal_features_index))
             minimal_features_length_list.append(len(minimal_features_index))
             minimal_features_importance_list.append('; '.join(str(v) for v in current_feature_importance/self.cv_fold))
+
+            # stats for comparison with repeating value prediction
+            if self.is_ts:
+                repeating_comp_ttest = stats.ttest_rel(current_squared_error, repeating_squared_error)
+                repeating_value_comp_diff.append(repeating_comp_ttest.statistic)
+                repeating_value_comp_pval.append(repeating_comp_ttest.pvalue)
+
             lef_over_features = lef_over_features.difference(minimal_features)
 
         result_df = pd.DataFrame(index=range(len(minimal_features_length_list)))
@@ -162,6 +175,9 @@ class MinimalSetCalc:
         result_df['minimal_set_idx'] = minimal_features_idx_list
         result_df['minimal_set_acc'] = minimal_features_rmse_list
         result_df['minimal_set_importances'] = minimal_features_importance_list
+        if self.is_ts:
+            result_df['repeating_value_comp_diff'] = repeating_value_comp_diff
+            result_df['repeating_value_comp_pval'] = repeating_value_comp_pval
         result_df.to_csv('{}/{}/minimal_sets/minimal_set_out_{}.csv'.format(self.output_dir, self.current_target, seed), index=False)
 
         filtered_df = result_df[result_df['minimal_set_acc'] > 0]

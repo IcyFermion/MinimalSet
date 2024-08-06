@@ -145,7 +145,7 @@ class MinimalSetCalc:
             else:
                 continue_flag = True
             while (continue_flag):
-                keep_feature_num = int(len(feature_list)*feature_keep_rate)
+                keep_feature_num = int(len(minimal_features)*feature_keep_rate)
                 kept_features = minimal_features[np.argsort(current_feature_importance)[-1*keep_feature_num:]]
                 current_X = X[kept_features]
                 current_cv_out = cross_validate(model, current_X, y, cv=cv_splits, n_jobs=1, return_train_score=True, return_estimator=True)

@@ -19,7 +19,7 @@ data_matrix = pd.read_csv('./data/NResponse_features.csv', index_col=0)
 # Feature data X in the shape of (n_observations, n_features)
 X = data_matrix.iloc[:-2].T
 # target data y in the shape of (n_targets, n_observations) or (n_observations,)
-y = data_matrix.loc[target_feature_names].values
+y = data_matrix.loc[target_feature_names].T
 
 
 # %%

@@ -27,14 +27,10 @@ class MinimalSetCalc:
                 output_dir='./output',
                 size_threshold=10,
                 is_ts=False,
-                ts_splits=None,
-                repeating_y=None):
+                ts_meta_df=None):
         self.X = X
-        self.y_list = y
-        self.repeating_y_list = y
         if len(y.shape) == 1:
-            self.y_list = np.array([y])
-            self.repeating_y_list = np.array([y])
+            raise TypeError("Need y to be a pandas dataframe shaped as (n_samples, n_outputs)")
         self.target_names = target_names
         self.model = model
         self.size_threshold = size_threshold
@@ -47,23 +43,55 @@ class MinimalSetCalc:
         self.output_dir = output_dir
         self.is_ts = is_ts
         if is_ts:
+            self.y_list = y
             self.cv_fold = 1
-            if ts_splits is None:
-                raise TypeError("Need train/test splits index input for time-series data")
-            if repeating_y is None:
-                raise TypeError("Need repeating y value input for time-series data")
+            self.ts_meta_df = pd.read_csv(ts_meta_df, index_col=0)
+            self.ts_initialize()
+            # if ts_splits is None:
+            #     raise TypeError("Need train/test splits index input for time-series data")
+            # if repeating_y is None:
+            #     raise TypeError("Need repeating y value input for time-series data")
 
-            self.ts_splits = ts_splits
-            self.repeating_y_list = repeating_y
-            if len(repeating_y.shape) == 1:
-                self.repeating_y_list = np.array([repeating_y])
+            # self.ts_splits = ts_splits
+            # self.repeating_y_list = repeating_y
+            # if len(repeating_y.shape) == 1:
+            #     self.repeating_y_list = np.array([repeating_y])
+        else:
+            self.y_list = y.T.values
+            self.repeating_y_list = y.T.values
+
 
         for name in target_names:
             Path(output_dir+'/'+name).mkdir(parents=True, exist_ok=True)
             Path(output_dir+'/'+name+'/co_dependency').mkdir(parents=True, exist_ok=True)
             Path(output_dir+'/'+name+'/minimal_sets').mkdir(parents=True, exist_ok=True)
 
-    
+    def ts_initialize(self):
+        train_source_indices = []
+        test_source_indices = []
+        train_target_indices = []
+        test_target_indices = []
+        for ind, row in self.ts_meta_df.iterrows():
+            if row['is_end']:
+                continue
+            next_indicies = row['next_exp_entries'].split(';')
+            if row['is_test']:
+                test_source_indices.extend([ind]*len(next_indicies))
+                test_target_indices.extend(next_indicies)
+            else:        
+                train_source_indices.extend([ind]*len(next_indicies))
+                train_target_indices.extend(next_indicies)
+        train_source = self.X.loc[train_source_indices]
+        test_source = self.X.loc[test_source_indices]
+        self.X = pd.concat([train_source, test_source])
+        train_target = self.y_list.loc[train_target_indices]
+        test_target = self.y_list.loc[test_target_indices]
+        repeating_train_target = self.y_list.loc[train_source_indices]
+        repeating_test_target = self.y_list.loc[test_source_indices]
+        self.y_list = pd.concat([train_target, test_target]).T.values
+        self.repeating_y_list = pd.concat([repeating_train_target, repeating_test_target]).T.values
+        self.ts_splits = [(np.arange(len(train_source)), np.arange(len(train_source), len(train_source)+len(test_source)))]
+
     def minimal_set_calc(self, seed):
         X = self.X
         # dropping self-targeting feature in it exists

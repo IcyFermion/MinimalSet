@@ -17,7 +17,7 @@ ts_meta_file_path = sys.argv[6]
 tf_list_df = pd.read_csv(feature_names_path, names=['tf'])
 tf_list = tf_list_df['tf'].values
 target_list_df = pd.read_csv(target_names_path, names=['target'])
-target_list = target_list_df['target'].value
+target_list = target_list_df['target'].values
 # load all expression data
 ts_df = pd.read_csv(data_mat_path, compression='gzip', index_col=0)
 

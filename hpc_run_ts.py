@@ -11,9 +11,9 @@ from minimal_set import MinimalSetCalc
 cpu_cores = int(sys.argv[1])
 data_mat_path = sys.argv[2]
 output_dir = sys.argv[3]
-target_names_path = sys.argv[4:]
-feature_names_path = sys.argv[5:]
-ts_meta_file_path = sys.argv[6:]
+target_names_path = sys.argv[4]
+feature_names_path = sys.argv[5]
+ts_meta_file_path = sys.argv[6]
 tf_list_df = pd.read_csv(feature_names_path, names=['tf'])
 tf_list = tf_list_df['tf'].values
 target_list_df = pd.read_csv(target_names_path, names=['target'])

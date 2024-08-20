@@ -270,7 +270,7 @@ class MinimalSetCalc:
             self.current_target = target_name
             X = self.X
             # dropping self-targeting feature in it exists
-            if self.current_target in X.columns:
+            if self.current_target in X.columns and self.is_ts:
                 X = X.drop(self.current_target, axis=1)
             feature_names = pd.DataFrame(index=X.columns)
             feature_names.to_csv(self.output_dir+'/'+target_name+'/feature_names.tsv', header=False)

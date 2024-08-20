@@ -23,11 +23,11 @@ ts_df = pd.read_csv(data_mat_path, compression='gzip', index_col=0)
 
 # %%
 X = ts_df[tf_list]
-y = ts_df[target_list[6:10]]
+y = ts_df[target_list]
 
 # %%
 # calculation setup
-test_run = MinimalSetCalc(X, y, target_list[6:10], 
+test_run = MinimalSetCalc(X, y, target_list, 
                           cpu_cores=cpu_cores, 
                           num_iterations=100, 
                           feature_keep_rate=0.5, 
